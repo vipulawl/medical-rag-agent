@@ -70,3 +70,31 @@ def query(question: str, top_k: int = 5, stream: bool = True, llm_model: str = N
         streaming=stream,
     )
     return engine.query(question)
+
+
+def query_stream(question: str, top_k: int = 5, llm_model: str = None):
+    """Yields (token, sources) where sources is populated on the final chunk."""
+    index = get_index(llm_model=llm_model)
+    engine = index.as_query_engine(similarity_top_k=top_k, streaming=True)
+    response = engine.query(question)
+
+    sources = []
+    for node in getattr(response, "source_nodes", []):
+        src = node.metadata.get("file_name") or node.metadata.get("source", "unknown")
+        title = node.metadata.get("title", "")
+        url = node.metadata.get("url", "")
+        sources.append({"name": src, "title": title, "url": url})
+
+    for token in response.response_gen:
+        yield token, None
+
+    yield "", sources
+
+
+def get_collection_count() -> int:
+    try:
+        _, client = get_vector_store()
+        collection = client.get_or_create_collection(COLLECTION_NAME)
+        return collection.count()
+    except Exception:
+        return 0
