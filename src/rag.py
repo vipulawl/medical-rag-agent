@@ -32,8 +32,8 @@ def _configure_settings(llm_model: str = None, embed_model: str = None):
         model_name=embed_model or EMBED_MODEL,
         base_url=OLLAMA_BASE_URL,
     )
-    Settings.chunk_size = 512
-    Settings.chunk_overlap = 64
+    Settings.chunk_size = 256
+    Settings.chunk_overlap = 32
 
 
 def get_vector_store():

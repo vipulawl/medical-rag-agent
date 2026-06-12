@@ -12,12 +12,35 @@ sys.path.insert(0, str(ROOT))
 from dotenv import load_dotenv
 load_dotenv(ROOT / ".env")
 
+import requests
 import streamlit as st
 from llama_index.core import SimpleDirectoryReader, Document
 from src.rag import add_documents, query_stream, get_collection_count
 
 DOCS_DIR = ROOT / "documents"
 DOCS_DIR.mkdir(exist_ok=True)
+OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
+
+
+@st.cache_resource(show_spinner="Warming up model...")
+def warmup_model(model: str):
+    """Load the model into Ollama's memory at startup so first query is fast."""
+    try:
+        requests.post(
+            f"{OLLAMA_BASE_URL}/api/generate",
+            json={"model": model, "prompt": "", "keep_alive": "60m"},
+            timeout=60,
+        )
+    except Exception:
+        pass
+
+
+def check_ollama() -> bool:
+    try:
+        r = requests.get(f"{OLLAMA_BASE_URL}/api/tags", timeout=3)
+        return r.status_code == 200
+    except Exception:
+        return False
 
 SYSTEM_PREAMBLE = (
     "You are a specialized medical research assistant. "
@@ -63,6 +86,12 @@ with st.sidebar:
     st.caption("Local · Private · On-premise")
     st.divider()
 
+    ollama_ok = check_ollama()
+    if ollama_ok:
+        st.success("Ollama connected", icon="✅")
+    else:
+        st.error("Ollama not running — start with `ollama serve`", icon="🔴")
+
     doc_count = get_collection_count()
     st.markdown(f"""
     <div class="stat-card">
@@ -74,8 +103,11 @@ with st.sidebar:
 
     st.divider()
     st.subheader("Settings")
-    top_k = st.slider("Chunks retrieved per query", min_value=1, max_value=15, value=5)
+    top_k = st.slider("Chunks retrieved per query", min_value=1, max_value=15, value=3)
     llm_model = st.text_input("Ollama model", value=os.getenv("LLM_MODEL", "llama3.2:3b"))
+
+    if ollama_ok:
+        warmup_model(llm_model)
 
     st.divider()
     st.subheader("Upload Documents")
